@@ -17,18 +17,18 @@ saveIncremental = True
 cnetImg = pg.Surface((512, 512))
 lImg = pg.Surface((512, 512))
 
-
 objects = []  # buttons
 
 
 class Button():
-    def __init__(self, x, y, width, height, buttonText='Button', onclickFunction=None, onePress=False):
+    def __init__(self, x, y, width, height, key, buttonText='Button', onclickFunction=None, onePress=False):
         self.x = x
         self.y = y
         self.width = width
         self.height = height
         self.onclickFunction = onclickFunction
         self.onePress = onePress
+        self.key = key
 
         self.fillColors = {
             'normal': '#ffffff',
@@ -50,6 +50,12 @@ class Button():
 
         mousePos = pg.mouse.get_pos()
         
+        self.buttonSurface.blit(self.buttonSurf, [
+            self.buttonRect.width/2 - self.buttonSurf.get_rect().width/2,
+            self.buttonRect.height/2 - self.buttonSurf.get_rect().height/2
+        ])
+        screen.blit(self.buttonSurface, self.buttonRect)
+        
         self.buttonSurface.fill(self.fillColors['normal'])
         if self.buttonRect.collidepoint(mousePos):
             self.buttonSurface.fill(self.fillColors['hover'])
@@ -59,19 +65,16 @@ class Button():
 
                 if self.onePress:
                     self.onclickFunction()
-
+                   
                 elif not self.alreadyPressed:
                     self.onclickFunction()
                     self.alreadyPressed = True
+                return self.key
 
             else:
                 self.alreadyPressed = False
 
-        self.buttonSurface.blit(self.buttonSurf, [
-            self.buttonRect.width/2 - self.buttonSurf.get_rect().width/2,
-            self.buttonRect.height/2 - self.buttonSurf.get_rect().height/2
-        ])
-        screen.blit(self.buttonSurface, self.buttonRect)
+
 
 
 def btnGo():
@@ -84,6 +87,7 @@ def btnLeft():
     
 def btnRight():
     print('Button right')
+    
 
 def main():
     
@@ -109,10 +113,9 @@ def main():
     font = pg.font.SysFont("Arial", 10)
     screen = pg.display.set_mode((512, 512)) 
     
-    customButton = Button(226, 480, 80, 40, 'Go', btnGo)
-    customButton = Button(126, 480, 80, 40, 'Turn', btnLeft)
-    customButton = Button(326, 480, 80, 40, 'Turn', btnRight)
-
+    goButton = Button(226, 480, 80, 40, 'go', 'Go', btnGo)
+    leftButton = Button(126, 480, 80, 40, 'left', 'Turn', btnLeft)
+    rightButton = Button(326, 480, 80, 40, 'right', 'Turn', btnRight)
         
     clock = pg.time.Clock()
     pg.mouse.set_visible(True)
@@ -198,7 +201,17 @@ def main():
         screen.blit( lImg, (0,0) )
         
         for object in objects:
-            object.process(screen)
+            key = object.process(screen)
+            if key == "go":
+                et = clock.tick()/500
+                posx, posy = (posx + et*np.cos(rot), posy + et*np.sin(rot))
+                print (key)
+            if key == "left":
+                rot = rot + 0.2
+                print (key)
+            if key == "right":
+                rot = rot - 0.2
+                print (key)                
         
         #fps = font.render(str(round(clock.get_fps(),1)), 1, pg.Color("coral"))
         #screen.blit(fps,(10,0))
@@ -210,7 +223,7 @@ def main():
             break
 
         pressed_keys = pg.key.get_pressed()        
-        posx, posy, rot, rot_v = keyboardMovement(pressed_keys,posx, posy, rot, rot_v, maph, clock.tick()/500)
+        posx, posy, rot, rot_v = keyboardMovement(pressed_keys, posx, posy, rot, rot_v, maph, clock.tick()/500)
         
         #mouseFocus = pg.mouse.get_focused()
         #if (pg.mouse.get_pressed()[0] != True) and mouseFocus != 0:
@@ -301,31 +314,6 @@ def maze_generator(x, y, size):
                 count = count+1
     return mapc, maph, mapr, exitx, exity
 
-def buttonMovement(pressed_keys, posx, posy, rot, rot_v, maph, et):
-    
-    x, y = (posx, posy)
-    
-    # p_mouse = pg.mouse.get_pos()
-    # rot = rot + 4*np.pi*(0.5-(p_mouse[0]-400)/150000)
-    rot_v = -0.1 # vertical view angle
-    
-    if pressed_keys[pg.K_UP] or pressed_keys[ord('w')]:
-        x, y = (x + et*np.cos(rot), y + et*np.sin(rot))
-        
-    if pressed_keys[pg.K_DOWN] or pressed_keys[ord('s')]:
-        x, y = (x - et*np.cos(rot), y - et*np.sin(rot))
-        
-    if pressed_keys[pg.K_LEFT] or pressed_keys[ord('a')]:
-        x, y = (x - et*np.sin(rot), y + et*np.cos(rot))
-        
-    if pressed_keys[pg.K_RIGHT] or pressed_keys[ord('d')]:
-        x, y = (x + et*np.sin(rot), y - et*np.cos(rot))
-        
-    if maph[int(x)][int(y)] == 0:
-        posx, posy = (x, y)
-                                                
-    return posx, posy, rot, rot_v
-
 def keyboardMovement(pressed_keys,posx, posy, rot, rot_v, maph, et):
     
     x, y = (posx, posy)
@@ -348,6 +336,8 @@ def keyboardMovement(pressed_keys,posx, posy, rot, rot_v, maph, et):
         
     if maph[int(x)][int(y)] == 0:
         posx, posy = (x, y)
+        
+    
                                                 
     return posx, posy, rot, rot_v
         
