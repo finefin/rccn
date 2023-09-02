@@ -1,3 +1,11 @@
+'''
+
+Info:  [TODO]
+
+
+
+'''
+
 import numpy as np
 import multiprocessing
 import pygame as pg
@@ -13,9 +21,20 @@ from threading import Thread
 scrCount = 0
 theSeed = 123
 saveIncremental = True
-
+saveCnet = False
 cnetImg = pg.Surface((512, 512))
+scrCount += 1
 lImg = pg.Surface((512, 512))
+lastImage = ""
+
+# encode the init image
+firstImage = pg.image.load('init.jpg')
+string_image = pg.image.tostring(firstImage, 'RGB')
+temp_surf = pg.image.fromstring(string_image,(512,512),'RGB' )
+tmp_arr = pg.surfarray.array3d(temp_surf)            
+tmp_arr = cv.transpose(tmp_arr) # transpose or image is x/y-flipped
+retval, bytes = cv.imencode('.png', tmp_arr)                  
+firstImage = base64.b64encode(bytes).decode('utf-8')
 
 objects = []  # buttons
 
@@ -74,29 +93,30 @@ class Button():
             else:
                 self.alreadyPressed = False
 
-
-
-
 def btnGo():
-    print('Button go')
-    
+    print('-> go')#  
     
 def btnLeft():
-    print('Button left')
-    
+    print('-> left')
     
 def btnRight():
-    print('Button right')
+    print('-> right')
     
 
 def main():
+
+    global objects
+    global lastImage
+    global firstImage
+    global cnetImg
+
     
-    size = 25 # size of the map
+    size = 100 # size of the map
     posx, posy, posz = (1, np.random.randint(1, size -1), 0.5)
-    rot, rot_v = (np.pi/4, 0)
+    rot, rot_v = (0, 0.1)
     lx, ly, lz = (size/2-0.5, size/2-0.5, 1)    
     mapc, maph, mapr, exitx, exity = maze_generator(posx, posy, size)
-    res, res_o = 4, [64, 96, 112, 160, 192, 224]
+    res, res_o = 3, [64, 96, 112, 160, 192, 224]
     width, height, mod, inc, sky, floor = adjust_resol(res_o[res])
    
     imgAlpha = 0  
@@ -104,9 +124,8 @@ def main():
     nuc = 8
     pool = multiprocessing.Pool(processes = nuc)
     renderFrame = False
-    alphaSDImage = 0
-
-    global objects
+    alphaSDImage = 100
+    
     bench = []
     running = True
     pg.init()
@@ -133,7 +152,9 @@ def main():
                 if event.key == ord('f'):              
                     alphaSDImage = 0 
                 if event.key == ord('g'):              
-                    alphaSDImage = 255                     
+                    alphaSDImage = 127
+                if event.key == ord('h'):              
+                    alphaSDImage = 255                    
                 if event.key == ord('p'):              
                     renderFrame = True                        
                 if event.key == ord('q'): # change resolution
@@ -146,30 +167,7 @@ def main():
                         width, height, mod, inc, sky, floor = adjust_resol(res_o[res])
                         
                         
-        if renderFrame == True:
-            renderFrame = False
-    
-            string_image = pg.image.tostring(cnetImg, 'RGB')
-            temp_surf = pg.image.fromstring(string_image,(512,512),'RGB' )
-            tmp_arr = pg.surfarray.array3d(temp_surf)            
-            tmp_arr = cv.transpose(tmp_arr) # transpose or image is x/y-flipped
-            retval, bytes = cv.imencode('.png', tmp_arr)                  
-            encoded_image = base64.b64encode(bytes).decode('utf-8')
-            
-            
-            string_image2 = pg.image.tostring(lImg, 'RGB')
-            temp_surf2 = pg.image.fromstring(string_image2,(512,512),'RGB' )
-            tmp_arr2 = pg.surfarray.array3d(temp_surf2)            
-            tmp_arr = cv.transpose(tmp_arr2) # transpose or image is x/y-flipped
-            retval2, bytes2 = cv.imencode('.png', tmp_arr2)                  
-            encoded_sd_image = base64.b64encode(bytes2).decode('utf-8')
-            
-            print ("base64 image ---->")
-            print (encoded_sd_image)
-            print ("<----")
-            
-            thread = Thread(target=sendCnetImage, args=(encoded_image,encoded_sd_image))
-            thread.start()
+
   
                         
         param_values = []
@@ -203,19 +201,18 @@ def main():
         for object in objects:
             key = object.process(screen)
             if key == "go":
-                et = clock.tick()/500
+                et = 1 #clock.tick()/500
                 posx, posy = (posx + et*np.cos(rot), posy + et*np.sin(rot))
-                print (key)
+                renderFrame = True 
             if key == "left":
                 rot = rot + 0.2
-                print (key)
+                renderFrame = True 
             if key == "right":
                 rot = rot - 0.2
-                print (key)                
+                renderFrame = True               
         
         #fps = font.render(str(round(clock.get_fps(),1)), 1, pg.Color("coral"))
-        #screen.blit(fps,(10,0))
-        
+        #screen.blit(fps,(10,0))     
         pg.display.flip()
         
         # player's movement
@@ -229,30 +226,65 @@ def main():
         #if (pg.mouse.get_pressed()[0] != True) and mouseFocus != 0:
             #pg.mouse.set_pos([400, 300])
             
+        if renderFrame == True:
+            renderFrame = False
+    
+            string_image = pg.image.tostring(cnetImg, 'RGB')
+            temp_surf = pg.image.fromstring(string_image,(512,512),'RGB' )
+            tmp_arr = pg.surfarray.array3d(temp_surf)            
+            tmp_arr = cv.transpose(tmp_arr) # transpose or image is x/y-flipped
+            retval, bytes = cv.imencode('.png', tmp_arr)                  
+            encoded_image = base64.b64encode(bytes).decode('utf-8')
+            
+            string_image2 = pg.image.tostring(lImg, 'RGB')
+            temp_surf2 = pg.image.fromstring(string_image2,(512,512),'RGB' )
+            tmp_arr2 = pg.surfarray.array3d(temp_surf2)            
+            tmp_arr = cv.transpose(tmp_arr2) # transpose or image is x/y-flipped
+            retval2, bytes2 = cv.imencode('.png', tmp_arr2)                  
+            encoded_sd_image = base64.b64encode(bytes2).decode('utf-8')
+            
+            print ("base64 image ---->")
+            print (encoded_sd_image)
+            print ("<----")
+            
+            if scrCount == 0:
+                lastImage = encoded_sd_image
+            #    firstImage = encoded_sd_image
+            # if scrCount == 3:
+            #    firstImage = encoded_sd_image
+            
+            thread = Thread(target=sendCnetImage, args=(encoded_image,encoded_sd_image))
+            thread.start()
+            
     stop_thread = True
     pg.quit()
     pool.close()
     
-# def printAI ():
-
 def sendCnetImage (encodedImage, encodedSdImage):
     global theSeed
     global lImg
+    global cnetImg
     global saveIncremental
+    global saveCnet
     global scrCount
+    global lastImage
+    global firstImage
     
     url = "http://127.0.0.1:7860"
     payload = {
-        "prompt": 'a dark (dungeon:1.4), stone floor, stone ceiling, stone walls, shimmering (lights:1.3), high detail photography <lora:dungeon_v2.0:2> <lora:more_details:1.2>',
-        "negative_prompt": "doors, windows, sun, fire",
+        "prompt": 'a (dungeon:1.2), stone floor, organic shapes, green tentacles, slime ceiling, stone walls, shimmering (lights:1.3), hard shadows, high detail digital art',
+        "negative_prompt": "<bad_prompt:0.8>,<bad-artist:0.8>,<bad-artist-anime:0.8>,<bad-hands-5:0.8>",
         "init_images": [encodedSdImage],
         "sampler_index": "UniPC",
         "seed": theSeed,
-        "denoising_strength": 1,
+        "denoising_strength": 0.9,
         "batch_size": 1,
-        "steps": 25,
-        "cfg_scale": 4,
+        "steps": 8,
+        "cfg_scale": 7,
         "alwayson_scripts": {
+            "Additional networks for generating":{
+                "args":[True, False,'LoRA', 'scapes/dungeon_v2.0(4ed24d3856e8)', 1, 1, 'LoRA', 'concept/more_details(3b8aa1d351ef)', 1.6, 1.6, 'LoRA', 'None', 1, 1, 'LoRA', 'None', 1, 1, 'LoRA', 'None', 1, 1]
+                },
             "controlnet": {
                 "args": [
                     {
@@ -260,7 +292,7 @@ def sendCnetImage (encodedImage, encodedSdImage):
                         'enabled': True,
                         'module': "none",
                         'model': "control_v11f1p_sd15_depth [cfd03158]",
-                        'weight': 1,
+                        'weight': 1.5,
                         'resize_mode': 1,
                         'low_vram': False,
                         'processor_res': 512,
@@ -269,6 +301,14 @@ def sendCnetImage (encodedImage, encodedSdImage):
                         'guidance_start': 0, 
                         'guidance_end': 1, 
                         'control_mode': 2,
+                        'pixel_perfect': True
+                    },
+                    {
+                        "input_image": firstImage,
+                        "model": "diff_control_sd15_temporalnet_fp16 [adc6bd97]",
+                        "module": "none",
+                        "weight": 0.5,
+                        'enabled': True,
                         'pixel_perfect': True
                     }
                 ]
@@ -283,16 +323,22 @@ def sendCnetImage (encodedImage, encodedSdImage):
     result = r['images'][0]   
     renderFrame = False
     lImg = pg.image.load(io.BytesIO(base64.b64decode(result.split(",", 1)[0])))
+    lastImage = encodedSdImage
+#    if scrCount == 1:
+#        firstImage = encodedSdImage
     
     if saveIncremental == True:
         pg.image.save(lImg, "scr_%d.jpg" % scrCount )
-        scrCount += 1
+        if saveCnet == True:
+            pg.image.save(cnetImg, "scrCnet_%d.jpg" % scrCount )
+        
+    scrCount += 1
     
 def maze_generator(x, y, size):
     mapc = np.random.uniform(0, 0.1, (size,size,3)) 
     mapr = np.random.choice([0, 0, 0, 0], (size,size))
-    maph = np.random.choice([0, 0, 0, 0, 0, 0, 0.1, 0.3, .9], (size,size))
-    maph[0,:], maph[size-1,:], maph[:,0], maph[:,size-1] = (.9,.9,.9,.9)
+    maph = np.random.choice([0, 0, 0, 0, 0, 0, 0, 0, .9], (size,size))
+    maph[0,:], maph[size-1,:], maph[:,0], maph[:,size-1] = (.85,.85,.85,.85)
 
     mapc[x][y], maph[x][y], mapr[x][y] = (0, 0, 0)
     count = 0 
@@ -329,10 +375,12 @@ def keyboardMovement(pressed_keys,posx, posy, rot, rot_v, maph, et):
         x, y = (x - et*np.cos(rot), y - et*np.sin(rot))
         
     if pressed_keys[pg.K_LEFT] or pressed_keys[ord('a')]:
-        x, y = (x - et*np.sin(rot), y + et*np.cos(rot))
+        # x, y = (x - et*np.sin(rot), y + et*np.cos(rot))
+        rot = rot + 0.1
         
     if pressed_keys[pg.K_RIGHT] or pressed_keys[ord('d')]:
-        x, y = (x + et*np.sin(rot), y - et*np.cos(rot))
+        #x, y = (x + et*np.sin(rot), y - et*np.cos(rot))
+        rot = rot - 0.1
         
     if maph[int(x)][int(y)] == 0:
         posx, posy = (x, y)
