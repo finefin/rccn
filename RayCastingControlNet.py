@@ -15,6 +15,7 @@ import cv2 as cv
 import base64
 import json
 import requests
+from PIL import Image
 from numba import njit
 from threading import Thread
 
@@ -22,28 +23,30 @@ scrCount = 1
 theSeed = 1543888376
 saveIncremental = True # saves the images in project folder 
 saveCnet = False
-cnetImg = pg.Surface((512, 512))
-lImg = pg.Surface((512, 512))
+cnetImgScreen = pg.Surface((512, 512))
+cnetImg = pg.Surface((1024, 512))
+lImg = pg.Surface((1024, 512))
 
 objects = []  # buttons
 
 def encodeImage ( img, width=512, height=512 ):
     string_image = pg.image.tostring(img, 'RGB')
-    temp_surf = pg.image.fromstring(string_image,(width,height),'RGB' )
+    temp_surf = pg.image.fromstring (string_image,(width, height),'RGB' )
     tmp_arr = pg.surfarray.array3d(temp_surf)            
     tmp_arr = cv.transpose(tmp_arr) # transpose or image is x/y-flipped
-    retval, bytes = cv.imencode('.png', tmp_arr)
-    encodedImage = base64.b64encode(bytes).decode('utf-8')
-    '''
-    print ("base64 image ---->")
-    print (encodedImage)
-    print ("<----")
-    '''    
+    retval, bytes = cv.imencode('.jpg', tmp_arr)
+    encodedImage = base64.b64encode(bytes).decode('utf-8')        
     return encodedImage 
 # encode the init images
-firstImage = encodeImage ( pg.image.load('init.jpg') )
+
+
+#print(Image.open("mask.jpg"))
+fImg = pg.image.load('init-1024-w.jpg')
+firstImage = encodeImage ( fImg , 1024, 512 )
 latentMask = encodeImage ( pg.image.load('mask.jpg'), 1024, 512 )
 lastImage = firstImage
+lImg.blit(fImg, (0,0))
+
 
 
 
@@ -128,13 +131,13 @@ def main():
    
     nuc = 8
     pool = multiprocessing.Pool(processes = nuc)
-    renderFrame = False
-    alphaSDImage = 255
+    renderFrame = True
+    alphaSDImage = 128
     
     bench = []
     running = True
     pg.init()
-    font = pg.font.SysFont("Arial", 10)
+    # font = pg.font.SysFont("Arial", 10)
     screen = pg.display.set_mode((1024, 512))
 
     clock = pg.time.Clock()
@@ -193,6 +196,8 @@ def main():
 
         pixels = np.reshape(pixels, (height,width,3))
         pixels = np.asarray(pixels)/np.sqrt(np.max(pixels))
+        
+        
 
         
         for object in objects:
@@ -208,7 +213,7 @@ def main():
                 rot = rot - 0.2
                 renderFrame = True               
            
-        pg.display.flip()
+        
         
         # player's movement
         if (int(posx) == exitx and int(posy) == exity):
@@ -217,13 +222,19 @@ def main():
         pressed_keys = pg.key.get_pressed()        
         posx, posy, rot, rot_v = keyboardMovement(pressed_keys, posx, posy, rot, rot_v, maph, clock.tick()/500)       
         
-        cnetImg = pg.surfarray.make_surface((np.rot90(pixels*255)).astype('uint8'))
-        cnetImg = pg.transform.scale(cnetImg, (512, 512))    
-        pg.Surface.set_alpha(lImg, alphaSDImage)
+        cnetImgScreen = pg.surfarray.make_surface((np.rot90(pixels*255)).astype('uint8'))
+        cnetImgScreen = pg.transform.scale(cnetImgScreen, (512, 512))
         
-        screen.blit(cnetImg, (512, 0))  
-        screen.blit( lImg, (0,0) )            
+        # pg.draw.rect(cnetImg, (0,0,0), pg.Rect(0, 0, 1024, 512))      
+        # cnetImg.blit(cnetImgScreen, (512,0))
+        
+        pg.Surface.set_alpha(lImg, alphaSDImage)
+                        
+        screen.blit(cnetImgScreen, (512, 0) )         
+        screen.blit(lImg, (0,0) )
 
+
+        pg.display.flip()
 
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         if renderFrame == True:
@@ -232,8 +243,8 @@ def main():
             if blitDelay >= delayTrigg:
                 blitDelay = 0
                 renderFrame = False               
-                encoded_image = encodeImage ( cnetImg ) # image for controlnet
-                encoded_sd_image = encodeImage ( lImg ) # will be stored as global lastImage
+                encoded_image = encodeImage ( cnetImgScreen, 512, 512 ) # image for controlnet
+                encoded_sd_image = encodeImage ( lImg, 1024, 512 ) # will be stored as global lastImage
                 thread = Thread(target=sendCnetImage, args=(encoded_image,encoded_sd_image))
                 thread.start()
             
@@ -258,11 +269,23 @@ def sendCnetImage (encodedImage, encodedSdImage):
     global lastImage
     global firstImage
     
+    print ("encodedSdImage ---->")
+    print (encodedSdImage)
+    print ("<----")
+    
+    print ("latentMask ---->")
+    print (latentMask)
+    print ("<----")
+    
+    print ("encodedImage ---->")
+    print (encodedImage)
+    print ("<----")
+    
     url = "http://127.0.0.1:7860"
     payload = {
         "prompt": 'a cardboard (hallway:1.2), (flat floor:1.4), digital art',
         "negative_prompt": "",
-        "init_images": [firstImage],
+        "init_images": [encodedSdImage],
         "mask": latentMask,
         "mask_blur": 0,
         "sampler_index": "UniPC",
@@ -280,9 +303,9 @@ def sendCnetImage (encodedImage, encodedSdImage):
                     {
                         "input_image": encodedImage,
                         'enabled': True,
-                        'module': "none",
+                        'module': "depth_midas",
                         'model': "control_v11f1p_sd15_depth [cfd03158]",
-                        'weight': 1.5,
+                        'weight': 1,
                         'resize_mode': 1,
                         'low_vram': False,
                         'processor_res': 512,
@@ -313,8 +336,11 @@ def sendCnetImage (encodedImage, encodedSdImage):
     r = response.json()
     result = r['images'][0]   
     renderFrame = False
-    lImg = pg.image.load(io.BytesIO(base64.b64decode(result.split(",", 1)[0])))
     lastImage = encodedSdImage
+    lImgTmp = pg.image.load( io.BytesIO  (base64.b64decode(result.split(",", 1)[0]) ) )
+    lImg.blit(lImgTmp, (0,0) )
+    #pg.display.flip()
+   
  #   if scrCount == 1:
  #       firstImage = encodedSdImage
     
