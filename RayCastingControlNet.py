@@ -23,6 +23,7 @@ scrCount = 1
 theSeed = 1543888376
 saveIncremental = True # saves the images in project folder 
 saveCnet = False
+renderButtons = True
 cnetImgScreen = pg.Surface((512, 512))
 cnetImg = pg.Surface((1024, 512))
 lImg = pg.Surface((1024, 512))
@@ -41,13 +42,11 @@ def encodeImage ( img, width=512, height=512 ):
 
 
 #print(Image.open("mask.jpg"))
-fImg = pg.image.load('init-1024-w.jpg')
-firstImage = encodeImage ( fImg , 1024, 512 )
+fImg = pg.image.load('init.jpg')
+firstImage = encodeImage ( fImg , 512, 512 )
 latentMask = encodeImage ( pg.image.load('mask.jpg'), 1024, 512 )
 lastImage = firstImage
 lImg.blit(fImg, (0,0))
-
-
 
 
 class Button():
@@ -120,6 +119,10 @@ def main():
     global lastImage
     global firstImage
     global cnetImg
+    global cnetImgScreen
+    global renderButtons
+    
+    # pg.image.save(lImg, "scr_INIT.jpg" )
     
     size = 100 # size of the map
     posx, posy, posz = (1, np.random.randint(1, size -1), 0.5)
@@ -131,20 +134,21 @@ def main():
    
     nuc = 8
     pool = multiprocessing.Pool(processes = nuc)
-    renderFrame = True
-    alphaSDImage = 128
+    renderFrame = False
+    
+    alphaSDImage = 0
     
     bench = []
     running = True
     pg.init()
     # font = pg.font.SysFont("Arial", 10)
-    screen = pg.display.set_mode((1024, 512))
+
+    screen = pg.display.set_mode((512, 512),pg.RESIZABLE)
 
     clock = pg.time.Clock()
     pg.mouse.set_visible(True)
     # pg.mouse.set_pos([400, 300])
 
-    imgAlpha = 0  
     blitDelay = 0    
     
     goButton = Button(226, 480, 80, 40, 'go', 'Go', btnGo)
@@ -175,7 +179,10 @@ def main():
                     if res < len(res_o)-1 :
                         res = res+1
                         width, height, mod, inc, sky, floor = adjust_resol(res_o[res])
-                        
+
+
+
+        
         param_values = []
         for j in range(height): #vertical loop 
             rot_j = rot_v + np.deg2rad(24 - j/mod)
@@ -196,42 +203,41 @@ def main():
 
         pixels = np.reshape(pixels, (height,width,3))
         pixels = np.asarray(pixels)/np.sqrt(np.max(pixels))
-        
-        
-
-        
-        for object in objects:
-            key = object.process(screen)
-            if key == "go":
-                et = 0.5 #clock.tick()/500
-                posx, posy = (posx + et*np.cos(rot), posy + et*np.sin(rot))
-                renderFrame = True 
-            if key == "left":
-                rot = rot + 0.2
-                renderFrame = True 
-            if key == "right":
-                rot = rot - 0.2
-                renderFrame = True               
-           
-        
-        
+             
+                 
         # player's movement
         if (int(posx) == exitx and int(posy) == exity):
             break
-
         pressed_keys = pg.key.get_pressed()        
         posx, posy, rot, rot_v = keyboardMovement(pressed_keys, posx, posy, rot, rot_v, maph, clock.tick()/500)       
+
+        # image 
         
         cnetImgScreen = pg.surfarray.make_surface((np.rot90(pixels*255)).astype('uint8'))
         cnetImgScreen = pg.transform.scale(cnetImgScreen, (512, 512))
         
-        # pg.draw.rect(cnetImg, (0,0,0), pg.Rect(0, 0, 1024, 512))      
-        # cnetImg.blit(cnetImgScreen, (512,0))
+        pg.draw.rect(cnetImg, (255,255,255), pg.Rect(0, 0, 1024, 512))      
+        cnetImg.blit(cnetImgScreen, (512,0))
         
-        pg.Surface.set_alpha(lImg, alphaSDImage)
-                        
-        screen.blit(cnetImgScreen, (512, 0) )         
+        # pg.Surface.set_alpha(lImg, alphaSDImage)
+                 
         screen.blit(lImg, (0,0) )
+        screen.blit(cnetImgScreen, (512, 0) )
+        
+        if renderButtons == True:
+            for object in objects:
+                key = object.process(screen)
+                if key == "go":
+                    renderButtons = False
+                    et = 0.2 #clock.tick()/500
+                    posx, posy = (posx + et*np.cos(rot), posy + et*np.sin(rot))
+                    renderFrame = True 
+                if key == "left":
+                    rot = rot + 0.1
+                    # renderFrame = True 
+                if key == "right":
+                    rot = rot - 0.1
+                    # renderFrame = True  
 
 
         pg.display.flip()
@@ -243,7 +249,7 @@ def main():
             if blitDelay >= delayTrigg:
                 blitDelay = 0
                 renderFrame = False               
-                encoded_image = encodeImage ( cnetImgScreen, 512, 512 ) # image for controlnet
+                encoded_image = encodeImage ( cnetImg, 1024, 512 ) # image for controlnet
                 encoded_sd_image = encodeImage ( lImg, 1024, 512 ) # will be stored as global lastImage
                 thread = Thread(target=sendCnetImage, args=(encoded_image,encoded_sd_image))
                 thread.start()
@@ -263,11 +269,13 @@ def sendCnetImage (encodedImage, encodedSdImage):
     global theSeed
     global lImg         # the surface that shows the sd image
     global cnetImg      # the surface that shows the controlnet image
+    global cnetImgScreen
     global saveIncremental
     global saveCnet
     global scrCount  
     global lastImage
     global firstImage
+    global renderButtons
     
     print ("encodedSdImage ---->")
     print (encodedSdImage)
@@ -283,71 +291,102 @@ def sendCnetImage (encodedImage, encodedSdImage):
     
     url = "http://127.0.0.1:7860"
     payload = {
-        "prompt": 'a cardboard (hallway:1.2), (flat floor:1.4), digital art',
+        "prompt": 'a dark dungeon, shiny floor, high quality rendering, raytracing',
         "negative_prompt": "",
         "init_images": [encodedSdImage],
         "mask": latentMask,
         "mask_blur": 0,
+        "inpainting_fill" : 3,
+        "inpaint_full_res" : 1,
+        "inpaint_full_res_padding" : 0,
+        "inpainting_mask_invert" : 0,
         "sampler_index": "UniPC",
-        "seed": theSeed,
-        "denoising_strength": 0.9,
+        "seed": -1,
+        "denoising_strength": 0.95,
         "batch_size": 1,
-        "steps": 8,
+        "steps": 20,
         "cfg_scale": 6,
         "alwayson_scripts": {
             "Additional networks for generating":{
-                "args":[True, False,'LoRA', 'None', 1, 1, 'LoRA', 'concept/more_details(3b8aa1d351ef)', -2, -2, 'LoRA', 'None', 1, 1, 'LoRA', 'None', 1, 1, 'LoRA', 'None', 1, 1]
+                "args":[True, False,'LoRA', 'None', 1, 1, 'LoRA', 'concept/more_details(3b8aa1d351ef)', 1, 1, 'LoRA', 'None', 1, 1, 'LoRA', 'None', 1, 1, 'LoRA', 'None', 1, 1]
                 },
             "controlnet": {
                 "args": [
                     {
                         "input_image": encodedImage,
                         'enabled': True,
-                        'module': "depth_midas",
+                        'module': "none",
                         'model': "control_v11f1p_sd15_depth [cfd03158]",
-                        'weight': 1,
-                        'resize_mode': 1,
+                        'weight': 2,
+                        'resize_mode': 0,
                         'low_vram': False,
                         'processor_res': 512,
                         'threshold_a': 0,
                         'threshold_b': 1,
                         'guidance_start': 0, 
                         'guidance_end': 1, 
-                        'control_mode': 0,
+                        'control_mode': 2,
                         'pixel_perfect': True
                     },
                     {
                         "input_image": firstImage,
                         "model": "",
                         "module": "reference_adain+attn",
-                        "weight": 0.8,
+                        "weight": 2,
                         'enabled': True,
-                        'pixel_perfect': True, 
-                        'control_mode': 0
+                        'resize_mode': 0,
+                        'low_vram': False,
+                        'processor_res': 512,
+                        'threshold_a': 0,
+                        'threshold_b': 1,
+                        'guidance_start': 0, 
+                        'guidance_end': 1, 
+                        'control_mode': 2,
+                        'pixel_perfect': True
                     }
                 ]
             }
         }
     }
     
+    '''
+    ,
+                    {
+                        "input_image": firstImage,
+                        "model": "",
+                        "module": "reference_adain+attn",
+                        "weight": 0.6,
+                        'enabled': True,
+                        'resize_mode': 0,
+                        'low_vram': False,
+                        'processor_res': 512,
+                        'threshold_a': 0,
+                        'threshold_b': 1,
+                        'guidance_start': 0, 
+                        'guidance_end': 1, 
+                        'control_mode': 2,
+                        'pixel_perfect': True
+                    }
+    
+    '''
+    
     # Trigger Generation
     response = requests.post(url=f'{url}/sdapi/v1/img2img', json=payload)
     # Read results
+    renderButtons = True
     r = response.json()
     result = r['images'][0]   
     renderFrame = False
     lastImage = encodedSdImage
     lImgTmp = pg.image.load( io.BytesIO  (base64.b64decode(result.split(",", 1)[0]) ) )
-    lImg.blit(lImgTmp, (0,0) )
-    #pg.display.flip()
-   
- #   if scrCount == 1:
- #       firstImage = encodedSdImage
+    lImg.blit(lImgTmp, (-512,0) )
     
     if saveIncremental == True:
-        pg.image.save(lImg, "scr_%d.jpg" % scrCount )
+        tmpimage = pg.Surface((512,512))  # Create image surface
+        tmpimage.blit(lImg,(0,0),((0,0),(512,512)))  # Blit portion of the display to the image
+        pg.image.save(tmpimage, "scr_%d.jpg" % scrCount )
         if saveCnet == True:
-            pg.image.save(cnetImg, "_out/scrCnet_%d.jpg" % scrCount )
+            pg.image.save(cnetImgScreen, "scrCnet_%d.jpg" % scrCount )
         
     scrCount += 1
     
@@ -430,7 +469,7 @@ def view_ray(x, y, z, cos, sin, sinz, mapc, lx, ly, lz, maph, exitx, exity):
     else:
         c = np.asarray([1,1,1]) # if all fails
 
-    h = 2*np.clip(1/dtol, 0, 1)
+    h = 1*np.clip(1/dtol, 0, 1)
     c = c*h
     return c, x, y, z, dtol
 
@@ -492,8 +531,8 @@ def caster(lista):
         sinz = inc*np.sin(rot_j)
         c, x, y, z, dtol = view_ray(x, y, z, cos, sin, sinz, mapc, lx, ly, lz,
                                     maph, exitx, exity)
-        if z < 1:
-            c = shadow_ray(x, y, z, lx, ly, lz, maph, c, inc, dtol)
+        #if z < 1:
+            #c = shadow_ray(x, y, z, lx, ly, lz, maph, c, inc, dtol)
             #if mapr[int(x)][int(y)] != 0 and z > 0:
             #    c = reflection(x, y, z, cos, sin, sinz, mapc, lx, ly, lz, maph,
             #                   exitx, exity, c, posz, inc, mapr, recur=False)
