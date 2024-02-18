@@ -1,7 +1,7 @@
 {
   "3": {
     "inputs": {
-      "seed": 636167948479658,
+      "seed": 168737396179274,
       "steps": 12,
       "cfg": 2,
       "sampler_name": "dpmpp_2s_ancestral",
@@ -42,7 +42,7 @@
   },
   "6": {
     "inputs": {
-      "text": "liminal space, backrooms, carpet floor",
+      "text": "liminal space, backrooms",
       "clip": [
         "23",
         1
@@ -55,7 +55,7 @@
   },
   "7": {
     "inputs": {
-      "text": "(ceiling light:1.4),text, watermark",
+      "text": "text, watermark",
       "clip": [
         "23",
         1
@@ -115,7 +115,7 @@
   },
   "22": {
     "inputs": {
-      "switch_1": "Off",
+      "switch_1": "On",
       "lora_name_1": "_sfw\\style\\scanno_Glitch_01.safetensors",
       "model_weight_1": 0.59,
       "clip_weight_1": 1,
@@ -140,7 +140,7 @@
   "23": {
     "inputs": {
       "model": [
-        "16",
+        "68",
         0
       ],
       "clip": [
@@ -165,8 +165,8 @@
       "clip_weight_1": 1,
       "switch_2": "On",
       "lora_name_2": "LiminalSpace\\backrooms_Level0-TheLobby.safetensors",
-      "model_weight_2": 0.8,
-      "clip_weight_2": 1,
+      "model_weight_2": 1.2,
+      "clip_weight_2": 0.6,
       "switch_3": "Off",
       "lora_name_3": "_sfw\\style\\limco-liminalspace.safetensors",
       "model_weight_3": 1,
@@ -190,7 +190,7 @@
     "inputs": {
       "strength": 1,
       "conditioning": [
-        "85",
+        "6",
         0
       ],
       "control_net": [
@@ -207,9 +207,103 @@
       "title": "Apply ControlNet"
     }
   },
+  "33": {
+    "inputs": {
+      "seed": 704184315842712
+    },
+    "class_type": "Seed Everywhere",
+    "_meta": {
+      "title": "Seed Everywhere"
+    }
+  },
+  "54": {
+    "inputs": {
+      "Value": 512
+    },
+    "class_type": "Integer",
+    "_meta": {
+      "title": "Integer"
+    }
+  },
+  "56": {
+    "inputs": {
+      "Value": 1
+    },
+    "class_type": "Integer",
+    "_meta": {
+      "title": "Integer"
+    }
+  },
+  "57": {
+    "inputs": {
+      "Value": 512
+    },
+    "class_type": "Integer",
+    "_meta": {
+      "title": "Integer"
+    }
+  },
+  "60": {
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus_sd15.bin"
+    },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {
+      "title": "Load IPAdapter Model"
+    }
+  },
+  "61": {
+    "inputs": {
+      "image": "Backrooms_model (1).jpg",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "63": {
+    "inputs": {
+      "clip_name": "model.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "Load CLIP Vision"
+    }
+  },
+  "68": {
+    "inputs": {
+      "weight": 0.6,
+      "noise": 0,
+      "weight_type": "original",
+      "start_at": 0,
+      "end_at": 1,
+      "unfold_batch": false,
+      "ipadapter": [
+        "60",
+        0
+      ],
+      "clip_vision": [
+        "63",
+        0
+      ],
+      "image": [
+        "76",
+        0
+      ],
+      "model": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "IPAdapterApply",
+    "_meta": {
+      "title": "Apply IPAdapter"
+    }
+  },
   "69": {
     "inputs": {
-      "image": "depthMap_tmp (1).jpg",
+      "image": "Screenshot 2023-08-27 133557.png",
       "upload": "image"
     },
     "class_type": "LoadImage",
@@ -230,10 +324,37 @@
       "title": "🔧 Image Contrast Adaptive Sharpening"
     }
   },
+  "76": {
+    "inputs": {
+      "height": 512,
+      "width": 512,
+      "interpolation_mode": "bicubic",
+      "image": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "JWImageResize",
+    "_meta": {
+      "title": "Image Resize"
+    }
+  },
+  "77": {
+    "inputs": {
+      "images": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
   "79": {
     "inputs": {
-      "intensity": 0.1,
-      "scale": 20,
+      "intensity": 0,
+      "scale": 10,
       "temperature": 0,
       "vignette": 0,
       "image": [
@@ -248,11 +369,11 @@
   },
   "80": {
     "inputs": {
-      "red_shift": 1,
+      "red_shift": 0,
       "red_direction": "horizontal",
-      "green_shift": 2,
+      "green_shift": 0,
       "green_direction": "horizontal",
-      "blue_shift": 3,
+      "blue_shift": 0,
       "blue_direction": "horizontal",
       "image": [
         "75",
@@ -268,64 +389,6 @@
     "inputs": {
       "images": [
         "8",
-        0
-      ]
-    },
-    "class_type": "PreviewImage",
-    "_meta": {
-      "title": "Preview Image"
-    }
-  },
-  "84": {
-    "inputs": {
-      "control_net_name": "control_v11p_sd15_lineart.pth"
-    },
-    "class_type": "ControlNetLoader",
-    "_meta": {
-      "title": "Load ControlNet Model"
-    }
-  },
-  "85": {
-    "inputs": {
-      "strength": 1,
-      "conditioning": [
-        "6",
-        0
-      ],
-      "control_net": [
-        "84",
-        0
-      ],
-      "image": [
-        "87",
-        0
-      ]
-    },
-    "class_type": "ControlNetApply",
-    "_meta": {
-      "title": "Apply ControlNet"
-    }
-  },
-  "87": {
-    "inputs": {
-      "preprocessor": "mlsd",
-      "sd_version": "sd15",
-      "resolution": 512,
-      "preprocessor_override": "None",
-      "image": [
-        "69",
-        0
-      ]
-    },
-    "class_type": "AV_ControlNetPreprocessor",
-    "_meta": {
-      "title": "ControlNet Preprocessor"
-    }
-  },
-  "88": {
-    "inputs": {
-      "images": [
-        "87",
         0
       ]
     },
