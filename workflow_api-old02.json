@@ -1,0 +1,388 @@
+{
+  "3": {
+    "inputs": {
+      "seed": 746516900163823,
+      "steps": 8,
+      "cfg": 2,
+      "sampler_name": "dpmpp_2s_ancestral",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "23",
+        0
+      ],
+      "positive": [
+        "27",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "5": {
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "photorealistic empty hallway, liminal space, (reflections:1.15), high embedding:OverallDetail, industrial liminal space",
+      "clip": [
+        "23",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "text, watermark",
+      "clip": [
+        "23",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "79",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "16": {
+    "inputs": {
+      "ckpt_name": "Illu\\cyberrealistic_v30.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "20": {
+    "inputs": {
+      "vae_name": "anythingKlF8Anime2VaeFtMse840000_klF8Anime2.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "22": {
+    "inputs": {
+      "switch_1": "On",
+      "lora_name_1": "_sfw\\style\\scanno_Glitch_01.safetensors",
+      "model_weight_1": 0.59,
+      "clip_weight_1": 1,
+      "switch_2": "Off",
+      "lora_name_2": "None",
+      "model_weight_2": 1,
+      "clip_weight_2": 0.5,
+      "switch_3": "Off",
+      "lora_name_3": "None",
+      "model_weight_3": 1,
+      "clip_weight_3": 1,
+      "lora_stack": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "CR LoRA Stack",
+    "_meta": {
+      "title": "💊 CR LoRA Stack"
+    }
+  },
+  "23": {
+    "inputs": {
+      "model": [
+        "68",
+        0
+      ],
+      "clip": [
+        "16",
+        1
+      ],
+      "lora_stack": [
+        "22",
+        0
+      ]
+    },
+    "class_type": "CR Apply LoRA Stack",
+    "_meta": {
+      "title": "💊 CR Apply LoRA Stack"
+    }
+  },
+  "24": {
+    "inputs": {
+      "switch_1": "On",
+      "lora_name_1": "LCM\\LCM_LoRA_Weights_SD15.safetensors",
+      "model_weight_1": 1,
+      "clip_weight_1": 1,
+      "switch_2": "Off",
+      "lora_name_2": "_sfw\\scapes\\industrial-liminal-10.safetensors",
+      "model_weight_2": 1,
+      "clip_weight_2": 1,
+      "switch_3": "Off",
+      "lora_name_3": "_sfw\\style\\limco-liminalspace.safetensors",
+      "model_weight_3": 1,
+      "clip_weight_3": 1
+    },
+    "class_type": "CR LoRA Stack",
+    "_meta": {
+      "title": "💊 CR LoRA Stack"
+    }
+  },
+  "25": {
+    "inputs": {
+      "control_net_name": "control_v11f1p_sd15_depth.pth"
+    },
+    "class_type": "ControlNetLoader",
+    "_meta": {
+      "title": "Load ControlNet Model"
+    }
+  },
+  "27": {
+    "inputs": {
+      "strength": 1.1,
+      "conditioning": [
+        "6",
+        0
+      ],
+      "control_net": [
+        "25",
+        0
+      ],
+      "image": [
+        "69",
+        0
+      ]
+    },
+    "class_type": "ControlNetApply",
+    "_meta": {
+      "title": "Apply ControlNet"
+    }
+  },
+  "33": {
+    "inputs": {
+      "seed": 777144608534090
+    },
+    "class_type": "Seed Everywhere",
+    "_meta": {
+      "title": "Seed Everywhere"
+    }
+  },
+  "54": {
+    "inputs": {
+      "Value": 512
+    },
+    "class_type": "Integer",
+    "_meta": {
+      "title": "Integer"
+    }
+  },
+  "56": {
+    "inputs": {
+      "Value": 1
+    },
+    "class_type": "Integer",
+    "_meta": {
+      "title": "Integer"
+    }
+  },
+  "57": {
+    "inputs": {
+      "Value": 512
+    },
+    "class_type": "Integer",
+    "_meta": {
+      "title": "Integer"
+    }
+  },
+  "60": {
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus_sd15.bin"
+    },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {
+      "title": "Load IPAdapter Model"
+    }
+  },
+  "61": {
+    "inputs": {
+      "image": "Backrooms_model (1).jpg",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "63": {
+    "inputs": {
+      "clip_name": "model.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "Load CLIP Vision"
+    }
+  },
+  "68": {
+    "inputs": {
+      "weight": 0.6,
+      "noise": 0,
+      "weight_type": "original",
+      "start_at": 0,
+      "end_at": 1,
+      "unfold_batch": false,
+      "ipadapter": [
+        "60",
+        0
+      ],
+      "clip_vision": [
+        "63",
+        0
+      ],
+      "image": [
+        "76",
+        0
+      ],
+      "model": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "IPAdapterApply",
+    "_meta": {
+      "title": "Apply IPAdapter"
+    }
+  },
+  "69": {
+    "inputs": {
+      "image": "Screenshot 2023-08-27 133557.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "75": {
+    "inputs": {
+      "amount": 0.4,
+      "image": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "ImageCASharpening+",
+    "_meta": {
+      "title": "🔧 Image Contrast Adaptive Sharpening"
+    }
+  },
+  "76": {
+    "inputs": {
+      "height": 512,
+      "width": 512,
+      "interpolation_mode": "bicubic",
+      "image": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "JWImageResize",
+    "_meta": {
+      "title": "Image Resize"
+    }
+  },
+  "77": {
+    "inputs": {
+      "images": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "79": {
+    "inputs": {
+      "intensity": 0.2,
+      "scale": 10,
+      "temperature": 0,
+      "vignette": 1,
+      "image": [
+        "80",
+        0
+      ]
+    },
+    "class_type": "FilmGrain",
+    "_meta": {
+      "title": "FilmGrain"
+    }
+  },
+  "80": {
+    "inputs": {
+      "red_shift": 3,
+      "red_direction": "horizontal",
+      "green_shift": 2,
+      "green_direction": "horizontal",
+      "blue_shift": 7,
+      "blue_direction": "horizontal",
+      "image": [
+        "75",
+        0
+      ]
+    },
+    "class_type": "ChromaticAberration",
+    "_meta": {
+      "title": "ChromaticAberration"
+    }
+  }
+}

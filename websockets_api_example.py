@@ -1,35 +1,23 @@
-'''
+#This is an example that uses the websockets api to know when a prompt execution is done
+#Once the prompt execution is done it downloads the images using the /history endpoint
 
-Info:  [TODO]
+import websocket #NOTE: websocket-client (https://github.com/websocket-client/websocket-client)
+import uuid
+import json
+import urllib.request
+import urllib.parse
+import random
 
-
-
-'''
-
-import numpy as np
-import math 
-import multiprocessing
 import pygame as pg
-import io
-import sys
 import cv2 as cv
 import base64
-import json
-import requests
 from PIL import Image
 from numba import njit
 from threading import Thread
-
-scrCount = 1
-theSeed = 1543888376
-saveIncremental = True # saves the images in project folder 
-saveCnet = True
-renderButtons = True
-cnetImgScreen = pg.Surface((512, 512))
-cnetImg = pg.Surface((1024, 512))
-lImg = pg.Surface((1024, 512))
-
-objects = []  # buttons
+import numpy as np
+import io
+import math 
+import multiprocessing
 
 def encodeImage ( img, width=512, height=512 ):
     string_image = pg.image.tostring(img, 'RGB')
@@ -41,14 +29,71 @@ def encodeImage ( img, width=512, height=512 ):
     return encodedImage 
 # encode the init images
 
+cnetImgScreen = pg.Surface((512, 512))
+cnetImg = pg.Surface((1024, 512))
+lImg = pg.Surface((1024, 512))
 
-#print(Image.open("mask.jpg"))
+scrCount = 1
+theSeed = 1543888376
+saveIncremental = True # saves the images in project folder 
+saveCnet = True
+renderButtons = True
+
 fImg = pg.image.load('init.jpg')
 firstImage = encodeImage ( fImg , 512, 512 )
 latentMask = encodeImage ( pg.image.load('mask.jpg'), 1024, 512 )
-lastImage = firstImage
+# # # lastImage = firstImage
 lImg.blit(fImg, (0,0))
 lImg.blit(fImg, (512,0))
+
+objects = []  # buttons
+
+server_address = "127.0.0.1:8188"
+client_id = str(uuid.uuid4())
+
+def queue_prompt(prompt):
+    p = {"prompt": prompt, "client_id": client_id}
+    data = json.dumps(p).encode('utf-8')
+    req =  urllib.request.Request("http://{}/prompt".format(server_address), data=data)
+    return json.loads(urllib.request.urlopen(req).read())
+
+def get_image(filename, subfolder, folder_type):
+    data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
+    url_values = urllib.parse.urlencode(data)
+    with urllib.request.urlopen("http://{}/view?{}".format(server_address, url_values)) as response:
+        return response.read()
+
+def get_history(prompt_id):
+    with urllib.request.urlopen("http://{}/history/{}".format(server_address, prompt_id)) as response:
+        return json.loads(response.read())
+
+def get_images(ws, prompt):
+    prompt_id = queue_prompt(prompt)['prompt_id']
+    output_images = {}
+    while True:
+        out = ws.recv()
+        if isinstance(out, str):
+            message = json.loads(out)
+            if message['type'] == 'executing':
+                data = message['data']
+                if data['node'] is None and data['prompt_id'] == prompt_id:
+                    break #Execution is done
+        else:
+            continue #previews are binary data
+
+    history = get_history(prompt_id)[prompt_id]
+    for o in history['outputs']:
+        for node_id in history['outputs']:
+            node_output = history['outputs'][node_id]
+            if 'images' in node_output:
+                images_output = []
+                for image in node_output['images']:
+                    image_data = get_image(image['filename'], image['subfolder'], image['type'])
+                    images_output.append(image_data)
+            output_images[node_id] = images_output
+
+    return output_images
+
 
 
 class Button():
@@ -252,24 +297,64 @@ def main():
             if blitDelay >= delayTrigg:
                 blitDelay = 0
                 renderFrame = False    
-                #subs = pg.transform.scale_by (lImg,1.3)
-                #lImg.blit(subs, (-100,-64) )
-                
-                #tmpimg = pg.Surface((512,512))  # Create image surface
-                #tmpimg.blit(lImg,(512,0),((0,0),(512,512)))  # Blit portion of the display to the image
+
                 lImg.blit(cnetImg, (512,0) ) 
 
                 encoded_image = encodeImage ( cnetImg, 1024, 512 ) # image for controlnet
                 encoded_sd_image = encodeImage ( lImg, 1024, 512 ) # will be stored as global lastImage
-                thread = Thread(target=sendCnetImage, args=(encoded_image,encoded_sd_image))
+                thread = Thread( target=doWorkflow, args=(encoded_image,cnetImg) )   #, args=(encoded_image,encoded_sd_image)
                 thread.start()
-            
-            
-            
+                  
     stop_thread = True
     pg.quit()
     pool.close()
 
+
+def doWorkflow( encodedImage,cnetImg ):
+
+    global renderButtons
+    global cnetImgScreen
+    
+    #print ("encodedImage ---->")
+    #print (encodedImage)
+    #print ("<----")
+       
+    
+    # Opening JSON workflow
+    f = open('workflow_api.json')
+     
+    # returns JSON object as 
+    # a dictionary
+    prompt = json.load(f)
+
+    #set the text prompt for our positive CLIPTextEncode
+    #prompt["6"]["inputs"]["text"] = "masterpiece best quality man"
+
+    #set the seed for our KSampler node
+    prompt["3"]["inputs"]["seed"] = 10  #random.random() * 1000000
+    
+    
+    pg.image.save(cnetImgScreen, "E:\\AI\\automatic-fork\\ComfyUI_windows_portable\\ComfyUI\\input\\API-IN\\scrCnet_%d.jpg" % scrCount )
+      
+    # set the depth map
+    #prompt["27"]["inputs"]["image"] = "data:image/png;base64," + encodedImage
+    prompt["69"]["inputs"]["image"] = "API-IN\\scrCnet_%d.jpg" % scrCount
+    
+    #print (prompt["32"]["inputs"]["image_data"])
+
+    ws = websocket.WebSocket()
+    ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
+    images = get_images(ws, prompt)
+    renderButtons = True
+    renderFrame = False
+
+
+    for node_id in images:
+        for image_data in images[node_id]:
+            lImgTmp = pg.image.load( io.BytesIO(image_data) )
+            
+            #image.show()
+            lImg.blit(lImgTmp, (0,0) )
 
 
 
@@ -406,9 +491,10 @@ def sendCnetImage (encodedImage, encodedSdImage):
     response = requests.post(url=f'{url}/sdapi/v1/img2img', json=payload)
     # Read results
     renderButtons = True
+    renderFrame = False
     r = response.json()
     result = r['images'][0]   
-    renderFrame = False
+    
     
     lImgTmp = pg.image.load( io.BytesIO  (base64.b64decode(result.split(",", 1)[0]) ) )
 

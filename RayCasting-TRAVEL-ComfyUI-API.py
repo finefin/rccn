@@ -1,35 +1,23 @@
-'''
+#This is an example that uses the websockets api to know when a prompt execution is done
+#Once the prompt execution is done it downloads the images using the /history endpoint
 
-Info:  [TODO]
+import websocket #NOTE: websocket-client (https://github.com/websocket-client/websocket-client)
+import uuid
+import json
+import urllib.request
+import urllib.parse
+import random
 
-
-
-'''
-
-import numpy as np
-import math 
-import multiprocessing
 import pygame as pg
-import io
-import sys
 import cv2 as cv
 import base64
-import json
-import requests
 from PIL import Image
 from numba import njit
 from threading import Thread
-
-scrCount = 1
-theSeed = 1543888376
-saveIncremental = True # saves the images in project folder 
-saveCnet = True
-renderButtons = True
-cnetImgScreen = pg.Surface((512, 512))
-cnetImg = pg.Surface((1024, 512))
-lImg = pg.Surface((1024, 512))
-
-objects = []  # buttons
+import numpy as np
+import io
+import math 
+import multiprocessing
 
 def encodeImage ( img, width=512, height=512 ):
     string_image = pg.image.tostring(img, 'RGB')
@@ -41,14 +29,75 @@ def encodeImage ( img, width=512, height=512 ):
     return encodedImage 
 # encode the init images
 
+cnetImgScreen = pg.Surface((512, 512))
+cnetImg = pg.Surface((1024, 512))
+lImg = pg.Surface((1024, 512))
 
-#print(Image.open("mask.jpg"))
+scrCount = 1
+theSeed = 1543888376
+
+turnFactor = 0
+walkSpeed = 0
+
+saveIncremental = True # saves the images in project folder 
+saveCnet = True
+renderButtons = True
+
 fImg = pg.image.load('init.jpg')
 firstImage = encodeImage ( fImg , 512, 512 )
 latentMask = encodeImage ( pg.image.load('mask.jpg'), 1024, 512 )
-lastImage = firstImage
+# # # lastImage = firstImage
 lImg.blit(fImg, (0,0))
 lImg.blit(fImg, (512,0))
+
+objects = []  # buttons
+
+server_address = "127.0.0.1:8188"
+client_id = str(uuid.uuid4())
+
+def queue_prompt(prompt):
+    p = {"prompt": prompt, "client_id": client_id}
+    data = json.dumps(p).encode('utf-8')
+    req =  urllib.request.Request("http://{}/prompt".format(server_address), data=data)
+    return json.loads(urllib.request.urlopen(req).read())
+
+def get_image(filename, subfolder, folder_type):
+    data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
+    url_values = urllib.parse.urlencode(data)
+    with urllib.request.urlopen("http://{}/view?{}".format(server_address, url_values)) as response:
+        return response.read()
+
+def get_history(prompt_id):
+    with urllib.request.urlopen("http://{}/history/{}".format(server_address, prompt_id)) as response:
+        return json.loads(response.read())
+
+def get_images(ws, prompt):
+    prompt_id = queue_prompt(prompt)['prompt_id']
+    output_images = {}
+    while True:
+        out = ws.recv()
+        if isinstance(out, str):
+            message = json.loads(out)
+            if message['type'] == 'executing':
+                data = message['data']
+                if data['node'] is None and data['prompt_id'] == prompt_id:
+                    break #Execution is done
+        else:
+            continue #previews are binary data
+
+    history = get_history(prompt_id)[prompt_id]
+    for o in history['outputs']:
+        for node_id in history['outputs']:
+            node_output = history['outputs'][node_id]
+            if 'images' in node_output:
+                images_output = []
+                for image in node_output['images']:
+                    image_data = get_image(image['filename'], image['subfolder'], image['type'])
+                    images_output.append(image_data)
+            output_images[node_id] = images_output
+
+    return output_images
+
 
 
 class Button():
@@ -123,41 +172,41 @@ def main():
     global cnetImg
     global cnetImgScreen
     global renderButtons
+    global renderFrame
     global lImg
-    
-    # pg.image.save(lImg, "scr_INIT.jpg" )
+    global turnFactor 
+    global walkSpeed 
     
     size = 100 # size of the map
-    posx, posy, posz = (50, 50, 0.5)
+    posx, posy, posz = (1, 1, 0.3)
     rot, rot_v = (0, 0.1)
     lx, ly, lz = (size/2-0.5, size/2-0.5, 1)    
     mapc, maph, mapr, exitx, exity = maze_generator(posx, posy, size)
-    res, res_o = 3, [64, 96, 112, 160, 192, 224, 448]
+    res, res_o = 0, [64, 96, 112, 160, 192, 224, 448]
     width, height, mod, inc, sky, floor = adjust_resol(res_o[res])
    
     nuc = 8
     pool = multiprocessing.Pool(processes = nuc)
-    renderFrame = False
+    renderFrame = True
     
     alphaSDImage = 0
     
     bench = []
     running = True
-    posx, posy =(50.5,50.5)
-    pg.init()
-    # font = pg.font.SysFont("Arial", 10)
 
-    screen = pg.display.set_mode((512, 512),pg.RESIZABLE)
+    pg.init()
+
+    screen = pg.display.set_mode((1024, 512),pg.RESIZABLE)
 
     clock = pg.time.Clock()
     pg.mouse.set_visible(True)
-    # pg.mouse.set_pos([400, 300])
 
     blitDelay = 0    
     
     goButton = Button(226, 480, 80, 40, 'go', 'Go', btnGo)
     leftButton = Button(126, 480, 80, 40, 'left', 'Turn', btnLeft)
     rightButton = Button(326, 480, 80, 40, 'right', 'Turn', btnRight)
+    
 
     while running:
         
@@ -185,8 +234,6 @@ def main():
                         width, height, mod, inc, sky, floor = adjust_resol(res_o[res])
 
 
-
-        
         param_values = []
         for j in range(height): #vertical loop 
             rot_j = rot_v + np.deg2rad(24 - j/mod)
@@ -208,12 +255,15 @@ def main():
         pixels = np.reshape(pixels, (height,width,3))
         pixels = np.asarray(pixels)/np.sqrt(np.max(pixels))
              
-                 
+                        
         # player's movement
         if (int(posx) == exitx and int(posy) == exity):
             break
         pressed_keys = pg.key.get_pressed()        
-        posx, posy, rot, rot_v = keyboardMovement(pressed_keys, posx, posy, rot, rot_v, maph, clock.tick()/500)       
+        posx, posy, rot, rot_v, walkSpeed = keyboardMovement(pressed_keys, posx, posy, rot, rot_v, maph, clock.tick()/500, walkSpeed)       
+
+        rot = rot + turnFactor
+        posx, posy = (posx + walkSpeed*np.cos(rot), posy + walkSpeed*np.sin(rot))
 
         # image        
         cnetImgScreen = pg.surfarray.make_surface((np.rot90(pixels*255)).astype('uint8'))
@@ -230,17 +280,24 @@ def main():
         if renderButtons == True:
             for object in objects:
                 key = object.process(screen)
-                if key == "go":
-                    renderButtons = False
-                    et = 0.1 #clock.tick()/500
-                    posx, posy = (posx + et*np.cos(rot), posy + et*np.sin(rot))
-                    renderFrame = True 
+                
+                if key == "go":                  
+                    #et = 0.5 # 0.1 #clock.tick()/500
+                    #posx, posy = (posx + et*np.cos(rot), posy + et*np.sin(rot))
+                    #renderButtons = False
+                    #renderFrame = True
+                    walkSpeed = walkSpeed + 0.001
+                    
                 if key == "left":
-                    rot = rot + math.pi/2
-                    # renderFrame = True 
+                    turnFactor = turnFactor + 0.0001
+                    #rot = rot + math.pi/4
+                    #renderButtons = False
+                    #renderFrame = True 
                 if key == "right":
-                    rot = rot - math.pi/2
-                    # renderFrame = True  
+                    turnFactor = turnFactor - 0.0001
+                    #rot = rot - math.pi/4
+                    #renderButtons = False
+                    #renderFrame = True  
 
 
         pg.display.flip()
@@ -248,194 +305,69 @@ def main():
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         if renderFrame == True:
             blitDelay = blitDelay + 1
-            delayTrigg = round(clock.get_fps()) # wait for next frame after blit
+            delayTrigg = round(clock.get_fps()*2) # wait for next frame after blit
             if blitDelay >= delayTrigg:
                 blitDelay = 0
-                renderFrame = False    
-                #subs = pg.transform.scale_by (lImg,1.3)
-                #lImg.blit(subs, (-100,-64) )
-                
-                #tmpimg = pg.Surface((512,512))  # Create image surface
-                #tmpimg.blit(lImg,(512,0),((0,0),(512,512)))  # Blit portion of the display to the image
+                renderFrame = False # disable render until new image was loaded
                 lImg.blit(cnetImg, (512,0) ) 
-
                 encoded_image = encodeImage ( cnetImg, 1024, 512 ) # image for controlnet
                 encoded_sd_image = encodeImage ( lImg, 1024, 512 ) # will be stored as global lastImage
-                thread = Thread(target=sendCnetImage, args=(encoded_image,encoded_sd_image))
+                thread = Thread( target=startWorkflow, args=(encoded_image,cnetImg) )   #, args=(encoded_image,encoded_sd_image)
                 thread.start()
-            
-            
-            
+                  
     stop_thread = True
     pg.quit()
     pool.close()
 
-
-
-
-    
 # run this in a thread or program will pause until response of SD
-def sendCnetImage (encodedImage, encodedSdImage):
-    global theSeed
-    global fImg         # init.png
-    global lImg         # the surface that shows the sd image
-    global cnetImg      # the surface that shows the controlnet image
-    global cnetImgScreen
-    global saveIncremental
-    global saveCnet
-    global scrCount  
-    global lastImage
-    global firstImage
+def startWorkflow( encodedImage,cnetImg ):
+
+    global renderFrame
     global renderButtons
-    
-    print ("encodedSdImage ---->")
-    print (encodedSdImage)
-    print ("<----")
-    
-    print ("latentMask ---->")
-    print (latentMask)
-    print ("<----")
-    
-    print ("encodedImage ---->")
-    print (encodedImage)
-    print ("<----")
-    
-    url = "http://127.0.0.1:7860"
-    payload = {
-        "prompt": 'in the supermarket',
-        "negative_prompt": "blurry,artefacts",
-        "init_images": [encodedImage],
-        "mask": latentMask,
-        "mask_blur": 0,
-        "inpainting_fill" : 2,
-        "inpaint_full_res" : 1,
-        "inpaint_full_res_padding" : 0,
-        "inpainting_mask_invert" : 0,
-        "sampler_index": "UniPC",
-        "seed": 12345,
-        "denoising_strength": 0.99,
-        "batch_size": 1,
-        "steps": 25,
-        "cfg_scale": 7,
-        "alwayson_scripts": {
-            "Additional networks for generating":{
-                "args":[False, False,'LoRA', 'None', 0.5, 0.5, 'LoRA', 'None', -2, 0, 'LoRA', 'None', 1, 1, 'LoRA', 'None', 1, 1, 'LoRA', 'None', 1, 1]
-                },
-            "controlnet": {
-                "args": [
-                    {
-                        "input_image": encodedImage,
-                        'enabled': True,
-                        'module': "none",
-                        'model': "control_v11f1p_sd15_depth [cfd03158]",
-                        'weight': 1,
-                        'resize_mode': 0,
-                        'low_vram': False,
-                        'processor_res': 512,
-                        'threshold_a': 0,
-                        'threshold_b': 1,
-                        'guidance_start': 0, 
-                        'guidance_end': 1, 
-                        'control_mode': 0,
-                        'pixel_perfect': True
-                    },
-                    {
-                        "input_image": lastImage,
-                        "model": "diff_control_sd15_temporalnet_fp16 [adc6bd97]",
-                        "module": "none",
-                        "weight": 0.1,
-                        'enabled': True,
-                        'resize_mode': 0,
-                        'low_vram': False,
-                        'processor_res': 512,
-                        'threshold_a': 0,
-                        'threshold_b': 1,
-                        'guidance_start': 0, 
-                        'guidance_end': 1, 
-                        'control_mode': 0,
-                        'pixel_perfect': True
-                    }
+    global cnetImgScreen
 
-                ]
-            }
-        }
-    }
+    # Opening JSON workflow
+    # you can edit it while the script is running, if you like
+    f = open('workflow_api.json')
+     
+    # returns JSON object as 
+    # a dictionary
+    prompt = json.load(f)
+
+    # override the text prompt for our positive CLIPTextEncode
+    #prompt["6"]["inputs"]["text"] = "masterpiece best quality man"
+
+    # override the seed for our KSampler node
+    prompt["3"]["inputs"]["seed"] = 704184315842712 #random.random() * 1000000000
     
-    '''
+    # you can send the image through the A1111/SDNext API as a binary blob
+    # but this doesn't seem to work (yet), so I...
+    # save current depth map as temporary file (after I created the folder inside the /input folder
+    pg.image.save(cnetImgScreen, "API-IN\\depthMap_tmp.jpg")
     
-    ,
-                    {
-                        "input_image": encodedSdImage,
-                        "model": "diff_control_sd15_temporalnet_fp16 [adc6bd97]",
-                        "module": "",
-                        "weight": 1,
-                        'enabled': True,
-                        'resize_mode': 0,
-                        'low_vram': False,
-                        'processor_res': 512,
-                        'threshold_a': 0,
-                        'threshold_b': 1,
-                        'guidance_start': 0, 
-                        'guidance_end': 1, 
-                        'control_mode': 2,
-                        'pixel_perfect': True
-                    }
+    # point prompt to temporary depth map
+    # the index may change if you edit the workflow.json! 
+    prompt["69"]["inputs"]["image"] = "API-IN\\depthMap_tmp.jpg"
+
+    ws = websocket.WebSocket()
+    ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
+    images = get_images(ws, prompt)
+
+    for node_id in images:
+        for image_data in images[node_id]:
+            lImgTmp = pg.image.load( io.BytesIO(image_data) )
+            lImg.blit(lImgTmp, (0,0) )
     
-    
-    ,
-                    {
-                        "input_image": firstImage,
-                        "model": "",
-                        "module": "reference_adain+attn",
-                        "weight": 2,
-                        'enabled': True,
-                        'resize_mode': 0,
-                        'low_vram': False,
-                        'processor_res': 512,
-                        'threshold_a': 0,
-                        'threshold_b': 1,
-                        'guidance_start': 0, 
-                        'guidance_end': 1, 
-                        'control_mode': 2,
-                        'pixel_perfect': True
-                    }
-    
-    '''
-    
-    # Trigger Generation
-    response = requests.post(url=f'{url}/sdapi/v1/img2img', json=payload)
-    # Read results
     renderButtons = True
-    r = response.json()
-    result = r['images'][0]   
-    renderFrame = False
-    
-    lImgTmp = pg.image.load( io.BytesIO  (base64.b64decode(result.split(",", 1)[0]) ) )
+    renderFrame = True
 
-    #tmpLimg = pg.Surface((512,512))  # Create image surface
-    #tmpLimg.blit(lImgTmp, (0,0), ((512,512), (1024,1024)) )
-    
-    lImg.blit(lImgTmp, (-512,0) )
 
-    tmpimg = pg.Surface((512,512))  # Create image surface
-    tmpimg.blit(lImg,(0,0),((0,0),(512,512)))  # Blit portion of the display to the image
-#    lImg.blit(tmpimg, (512,0) ) 
-    
-    lastImage = encodeImage ( tmpimg , 512, 512 )    
-        
-    if saveIncremental == True:
-        pg.image.save(tmpimg, "scr_%d.jpg" % scrCount )
-        pg.image.save(lImg, "x-lImg_%d.jpg" % scrCount )
-        if saveCnet == True:
-            pg.image.save(cnetImgScreen, "scrCnet_%d.jpg" % scrCount )
-        
-    scrCount += 1
     
 def maze_generator(x, y, size):
     mapc = np.random.uniform(0, 0.1, (size,size,3)) 
     mapr = np.random.choice([0, 0, 0, 0], (size,size))
-    maph = np.random.choice([0, 0, 0, 0, 0, 0, 0, .9, .9], (size,size))
-    maph[0,:], maph[size-1,:], maph[:,0], maph[:,size-1] = (.85,.85,.85,.85)
+    maph = np.random.choice([0,0,0,0,0,0, 0, 0, 1, 0, 0, .2, 0, .9], (size,size))
+    maph[0,:], maph[size-1,:], maph[:,0], maph[:,size-1] = (1,1,1,1)
 
     mapc[x][y], maph[x][y], mapr[x][y] = (0, 0, 0)
     count = 0 
@@ -457,19 +389,20 @@ def maze_generator(x, y, size):
                 count = count+1
     return mapc, maph, mapr, exitx, exity
 
-def keyboardMovement(pressed_keys,posx, posy, rot, rot_v, maph, et):
+def keyboardMovement(pressed_keys,posx, posy, rot, rot_v, maph, et, walkSpeed):
     
     x, y = (posx, posy)
     
     # p_mouse = pg.mouse.get_pos()
     # rot = rot + 4*np.pi*(0.5-(p_mouse[0]-400)/150000)
-    rot_v = -0.1 # vertical view angle
+    rot_v = -0.2 + np.sin(et)*et # vertical view angle
     
     if pressed_keys[pg.K_UP] or pressed_keys[ord('w')]:
         x, y = (x + et*np.cos(rot), y + et*np.sin(rot))
         
     if pressed_keys[pg.K_DOWN] or pressed_keys[ord('s')]:
-        x, y = (x - et*np.cos(rot), y - et*np.sin(rot))
+        #x, y = (x - et*np.cos(rot), y - et*np.sin(rot))
+        walkSpeed = 0
         
     if pressed_keys[pg.K_LEFT] or pressed_keys[ord('a')]:
         # x, y = (x - et*np.sin(rot), y + et*np.cos(rot))
@@ -478,13 +411,13 @@ def keyboardMovement(pressed_keys,posx, posy, rot, rot_v, maph, et):
     if pressed_keys[pg.K_RIGHT] or pressed_keys[ord('d')]:
         #x, y = (x + et*np.sin(rot), y - et*np.cos(rot))
         rot = rot - 0.1
-        
+
     if maph[int(x)][int(y)] == 0:
         posx, posy = (x, y)
         
     
                                                 
-    return posx, posy, rot, rot_v
+    return posx, posy, rot, rot_v, walkSpeed
         
        
 @njit(fastmath=True)
@@ -504,9 +437,9 @@ def view_ray(x, y, z, cos, sin, sinz, mapc, lx, ly, lz, maph, exitx, exity):
 
     if z > 1: # ceiling
 ##        c = np.asarray([0.3,0.7,1])
-        c = np.asarray([.6,.6,.6]) 
-    elif z < 0: # floor
-        c = np.asarray([1,1,1])
+        c = np.asarray([1,1,1]) 
+    elif z < -1: # floor
+        c = np.asarray([.3,.3,.3])
     else:
         c = np.asarray([1,1,1]) # if all fails
 
